@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OPnet OnChain Ticketing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --orange: #f97316;
+    --orange-dim: #c2510e;
+    --gold: #fbbf24;
+    --bg: #070a0f;
+    --bg2: #0d1117;
+    --bg3: #111827;
+    --glass: rgba(255,255,255,0.04);
+    --border: rgba(249,115,22,0.25);
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(249,115,22,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(249,115,22,0.07) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(251,191,36,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+    animation: bgPulse 8s ease-in-out infinite alternate;
+  }
+  @keyframes bgPulse {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+  }
+
+  #app { position: relative; z-index: 1; }
+
+  /* Glassmorphism card */
+  .glass-card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .glass-card:hover {
+    border-color: rgba(249,115,22,0.5);
+    box-shadow: 0 0 30px rgba(249,115,22,0.1);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    background: linear-gradient(135deg, var(--orange), var(--orange-dim));
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:hover::after { opacity: 1; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(249,115,22,0.4); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--orange);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover { background: rgba(249,115,22,0.1); border-color: var(--orange); }
+
+  /* Nav */
+  nav {
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    background: rgba(7,10,15,0.8);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+  .badge-active { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+  .badge-used { background: rgba(100,116,139,0.15); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+  .badge-pending { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+
+  /* Input */
+  .inp {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .inp:focus { outline: none; border-color: var(--orange); }
+  .inp::placeholder { color: var(--muted); }
+  select.inp option { background: var(--bg2); }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(8px);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 560px;
+    width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: scale(0.95);
+    transition: transform 0.3s;
+  }
+  .modal-overlay.open .modal-box { transform: scale(1); }
+
+  /* Tabs */
+  .tab-btn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    color: var(--muted);
+    background: transparent;
+  }
+  .tab-btn.active {
+    color: var(--orange);
+    border-color: var(--border);
+    background: rgba(249,115,22,0.08);
+  }
+
+  /* Ticket card */
+  .ticket-card {
+    background: linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(251,191,36,0.04) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+  .ticket-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 120px; height: 120px;
+    background: radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .ticket-perforation {
+    border-top: 2px dashed var(--border);
+    position: relative;
+  }
+  .ticket-perforation::before, .ticket-perforation::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .ticket-perforation::before { left: -7px; }
+  .ticket-perforation::after { right: -7px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 12px;
+    animation: toastIn 0.3s ease forwards;
+    max-width: 340px;
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .toast-success { border-color: rgba(34,197,94,0.4); color: #22c55e; }
+  .toast-error { border-color: rgba(239,68,68,0.4); color: #ef4444; }
+  .toast-info { border-color: rgba(249,115,22,0.4); color: var(--orange); }
+
+  /* Spinner */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(249,115,22,0.2);
+    border-top-color: var(--orange);
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Glow text */
+  .glow {
+    text-shadow: 0 0 20px rgba(249,115,22,0.5);
+  }
+
+  /* Page transition */
+  .page { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Print styles */
+  @media print {
+    body { background: white; color: black; }
+    .no-print { display: none !important; }
+    .modal-box { border: none; box-shadow: none; }
+  }
+
+  /* Responsive helpers */
+  .grid-events { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  @media (max-width: 640px) { .grid-events { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- Toast container -->
+<div id="toast"></div>
+
+<!-- Modals -->
+<div id="receiptModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-6 no-print">
+      <h3 class="font-['Orbitron'] text-sm font-bold text-orange-400 tracking-widest">⬡ PAYMENT RECEIPT</h3>
+      <button class="btn-ghost text-xs" onclick="closeModal('receiptModal')">✕ CLOSE</button>
+    </div>
+    <div id="receiptContent"></div>
+    <div class="flex flex-wrap gap-2 mt-6 no-print" id="receiptActions"></div>
+  </div>
+</div>
+
+<div id="validateModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="font-['Orbitron'] text-sm font-bold text-orange-400 tracking-widest">⬡ VALIDATE TICKET</h3>
+      <button class="btn-ghost text-xs" onclick="closeModal('validateModal')">✕ CLOSE</button>
+    </div>
+    <div id="validateContent">
+      <p class="text-xs text-slate-400 mb-4">Enter Ticket ID or TXN Hash to verify on-chain ownership and check-in status.</p>
+      <input class="inp mb-3" id="validateInput" placeholder="Ticket ID or TXN Hash..." />
+      <button class="btn-primary w-full" onclick="doValidate()">VERIFY ON-CHAIN</button>
+      <div id="validateResult" class="mt-4"></div>
+    </div>
+  </div>
+</div>
+
+<div id="buyModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="font-['Orbitron'] text-sm font-bold text-orange-400 tracking-widest">⬡ BUY TICKET</h3>
+      <button class="btn-ghost text-xs" onclick="closeModal('buyModal')">✕ CLOSE</button>
+    </div>
+    <div id="buyContent"></div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app">
+
+  <!-- Navigation -->
+  <nav class="px-6 py-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center text-xs font-['Orbitron'] font-black text-black">OP</div>
+        <div>
+          <div class="font-['Orbitron'] text-xs font-bold tracking-widest text-orange-400">OPNET</div>
+          <div class="font-['Orbitron'] text-[9px] tracking-[3px] text-slate-500">ONCHAIN TICKETING</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="networkBadge" class="badge badge-active hidden">● BITCOIN L1</div>
+        <div id="walletInfo" class="hidden">
+          <span class="text-xs text-slate-400 font-mono" id="walletAddr"></span>
+        </div>
+        <button class="btn-primary" id="connectBtn" onclick="connectWallet()">CONNECT WALLET</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Tab navigation -->
+  <div class="px-6 py-3 border-b border-orange-900/20">
+    <div class="max-w-7xl mx-auto flex gap-2 overflow-x-auto">
+      <button class="tab-btn active" onclick="showPage('events', this)">EVENTS</button>
+      <button class="tab-btn" onclick="showPage('mytickets', this)">MY TICKETS</button>
+      <button class="tab-btn" onclick="showPage('validate', this)">VALIDATE</button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <main class="max-w-7xl mx-auto px-6 py-10">
+
+    <!-- Page: Events -->
+    <div id="page-events" class="page">
+      <!-- Hero -->
+      <div class="mb-10">
+        <div class="text-xs text-orange-500 font-['Orbitron'] tracking-[4px] mb-2">BITCOIN NATIVE · 100% ONCHAIN</div>
+        <h1 class="font-['Orbitron'] text-3xl md:text-5xl font-black text-white glow mb-3">
+          DISCOVER<br /><span class="text-orange-400">EVENTS</span>
+        </h1>
+        <p class="text-slate-400 text-sm max-w-md">Buy tickets secured by Bitcoin L1. No middlemen. Full ownership. Powered by OPnet protocol.</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="glass-card p-4 mb-8 flex flex-wrap gap-3 items-center">
+        <div class="flex-1 min-w-[160px]">
+          <select class="inp" id="filterCategory" onchange="renderEvents()">
+            <option value="">All Categories</option>
+            <option value="Music">🎵 Music</option>
+            <option value="Tech">💻 Tech</option>
+            <option value="Sports">⚽ Sports</option>
+            <option value="Art">🎨 Art</option>
+            <option value="Conference">🎤 Conference</option>
+          </select>
+        </div>
+        <div class="flex-1 min-w-[160px]">
+          <input type="date" class="inp" id="filterDate" onchange="renderEvents()" />
+        </div>
+        <button class="btn-ghost text-xs" onclick="clearFilters()">RESET</button>
+      </div>
+
+      <!-- Events grid -->
+      <div id="eventsGrid" class="grid-events"></div>
+    </div>
+
+    <!-- Page: My Tickets -->
+    <div id="page-mytickets" class="page hidden">
+      <div class="mb-8">
+        <div class="text-xs text-orange-500 font-['Orbitron'] tracking-[4px] mb-2">BLOCKCHAIN VERIFIED</div>
+        <h2 class="font-['Orbitron'] text-2xl font-black text-white">MY TICKETS</h2>
+      </div>
+      <div id="myTicketsList"></div>
+    </div>
+
+    <!-- Page: Validate -->
+    <div id="page-validate" class="page hidden">
+      <div class="mb-8">
+        <div class="text-xs text-orange-500 font-['Orbitron'] tracking-[4px] mb-2">ONCHAIN VERIFICATION</div>
+        <h2 class="font-['Orbitron'] text-2xl font-black text-white">TICKET VALIDATION</h2>
+      </div>
+      <div class="glass-card p-8 max-w-lg">
+        <p class="text-xs text-slate-400 mb-6">Verify ticket ownership and check-in status directly from Bitcoin blockchain via OPnet.</p>
+        <input class="inp mb-4" id="validateInputMain" placeholder="Enter Ticket ID or TXN Hash..." />
+        <button class="btn-primary w-full" onclick="doValidateMain()">VERIFY ON-CHAIN</button>
+        <div id="validateResultMain" class="mt-6"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- QR Modal -->
+<div id="qrModal" class="modal-overlay">
+  <div class="modal-box text-center">
+    <div class="flex items-center justify-between mb-6 no-print">
+      <h3 class="font-['Orbitron'] text-sm font-bold text-orange-400 tracking-widest">⬡ QR CODE</h3>
+      <button class="btn-ghost text-xs" onclick="closeModal('qrModal')">✕ CLOSE</button>
+    </div>
+    <div id="qrContainer" class="flex justify-center my-4 p-4 bg-white rounded-xl inline-block mx-auto"></div>
+    <p id="qrLabel" class="text-xs text-slate-400 mt-3 break-all"></p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STATE = {
+  wallet: null,
+  tickets: [],
+  events: [],
+  mcpEndpoint: 'https://ai.opnet.org/mcp',
+};
+
+// ============================================================
+// MOCK DATA — used as fallback if MCP endpoint is unavailable
+// ============================================================
+const MOCK_EVENTS = [
+  {
+    id: 'evt_001',
+    name: 'Bitcoin Summit 2025',
+    category: 'Conference',
+    date: '2025-09-15',
+    location: 'Miami, FL',
+    price: 0.005,
+    supply: 500,
+    remaining: 212,
+    organizer: 'bc1qopnet...xyz1',
+    description: 'The biggest Bitcoin ecosystem summit on the planet.',
+  },
+  {
+    id: 'evt_002',
+    name: 'OPnet Dev Hackathon',
+    category: 'Tech',
+    date: '2025-10-03',
+    location: 'Online',
+    price: 0.001,
+    supply: 300,
+    remaining: 87,
+    organizer: 'bc1qopnet...xyz2',
+    description: 'Build the future of Bitcoin smart contracts.',
+  },
+  {
+    id: 'evt_003',
+    name: 'Crypto Art Expo',
+    category: 'Art',
+    date: '2025-11-20',
+    location: 'New York, NY',
+    price: 0.003,
+    supply: 200,
+    remaining: 44,
+    organizer: 'bc1qopnet...xyz3',
+    description: 'Where digital art meets blockchain permanence.',
+  },
+  {
+    id: 'evt_004',
+    name: 'Lightning Music Festival',
+    category: 'Music',
+    date: '2025-12-01',
+    location: 'Austin, TX',
+    price: 0.008,
+    supply: 1000,
+    remaining: 631,
+    organizer: 'bc1qopnet...xyz4',
+    description: 'Live music powered by the Lightning Network.',
+  },
+  {
+    id: 'evt_005',
+    name: 'Bitcoin Sports Arena',
+    category: 'Sports',
+    date: '2025-09-28',
+    location: 'Las Vegas, NV',
+    price: 0.012,
+    supply: 800,
+    remaining: 355,
+    organizer: 'bc1qopnet...xyz5',
+    description: 'Championship fights with on-chain ticket verification.',
+  },
+];
+
+const MOCK_TICKETS = [
+  {
+    ticketId: 'TKT-8f3a2b1c',
+    eventId: 'evt_001',
+    eventName: 'Bitcoin Summit 2025',
+    quantity: 2,
+    status: 'Active',
+    txHash: '4a7b2c3d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b',
+    owner: '',
+    timestamp: 1720000000,
+    blockHeight: 845210,
+    price: 0.01,
+  },
+  {
+    ticketId: 'TKT-2c4e6f8a',
+    eventId: 'evt_003',
+    eventName: 'Crypto Art Expo',
+    quantity: 1,
+    status: 'Used',
+    txHash: 'b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2',
+    owner: '',
+    timestamp: 1719500000,
+    blockHeight: 844001,
+    price: 0.003,
+  },
+];
+
+// ============================================================
+// MCP INTEGRATION
+// ============================================================
+/**
+ * Generic MCP call wrapper.
+ * Falls back to mock data if endpoint is unreachable.
+ */
+async function callMCP(action, params = {}) {
+  try {
+    const res = await fetch(STATE.mcpEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, params, network: 'bitcoin' }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    console.warn(`[MCP] ${action} failed: ${e.message}. Using mock data.`);
+    return simulateMCP(action, params);
+  }
+}
+
+/** Simulates MCP responses with realistic mock data */
+function simulateMCP(action, params) {
+  const delay = (ms) => new Promise(r => setTimeout(r, ms));
+  return new Promise(async (resolve) => {
+    await delay(600 + Math.random() * 600);
+    switch (action) {
+      case 'get_events':
+        resolve({ success: true, data: MOCK_EVENTS });
+        break;
+      case 'get_my_tickets':
+        resolve({ success: true, data: MOCK_TICKETS.map(t => ({ ...t, owner: params.address })) });
+        break;
+      case 'buy_ticket': {
+        const txHash = genHash();
+        const ticketId = 'TKT-' + Math.random().toString(16).slice(2, 10);
+        resolve({
+          success: true,
+          data: {
+            txHash,
+            ticketId,
+            eventId: params.eventId,
+            quantity: params.quantity,
+            blockHeight: 845300 + Math.floor(Math.random() * 100),
+            timestamp: Math.floor(Date.now() / 1000),
+            status: 'Active',
+            owner: params.address,
+          }
+        });
+        break;
+      }
+      case 'get_transaction': {
+        const ev = MOCK_EVENTS.find(e => e.id === (params.eventId || 'evt_001')) || MOCK_EVENTS[0];
+        resolve({
+          success: true,
+          data: {
+            txHash: params.txHash || genHash(),
+            blockHeight: 845100 + Math.floor(Math.random() * 200),
+            confirmations: 6,
+            sender: params.sender || STATE.wallet || 'bc1q...unknown',
+            receiver: ev.organizer,
+            amount: ev.price * (params.quantity || 1),
+            eventName: ev.name,
+            quantity: params.quantity || 1,
+            timestamp: Math.floor(Date.now() / 1000),
+            status: 'Confirmed',
+          }
+        });
+        break;
+      }
+      case 'validate_ticket': {
+        const found = STATE.tickets.find(t =>
+          t.ticketId === params.id || t.txHash === params.id
+        ) || (params.id.length > 8 ? { ticketId: 'TKT-' + params.id.slice(0, 8), eventName: 'Bitcoin Summit 2025', status: 'Active', owner: STATE.wallet, quantity: 1 } : null);
+        if (found) {
+          resolve({ success: true, data: found });
+        } else {
+          resolve({ success: false, error: 'Ticket not found on-chain.' });
+        }
+        break;
+      }
+      case 'update_ticket_status':
+        resolve({ success: true, data: { updated: true, txHash: genHash() } });
+        break;
+      case 'connect_wallet':
+        resolve({ success: true, data: { address: 'bc1q' + Math.random().toString(36).slice(2, 16) + 'opnet' } });
+        break;
+      default:
+        resolve({ success: false, error: 'Unknown action' });
+    }
+  });
+}
+
+function genHash() {
+  return Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+}
+
+// ============================================================
+// WALLET CONNECTION
+// ============================================================
+async function connectWallet() {
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    // Try OPnet wallet injection first
+    let address = null;
+    if (window.opnet && window.opnet.connect) {
+      const acc = await window.opnet.connect();
+      address = acc.address || acc;
+    } else if (window.unisat) {
+      const accounts = await window.unisat.requestAccounts();
+      address = accounts[0];
+    } else {
+      // Simulate wallet via MCP
+      const res = await callMCP('connect_wallet', {});
+      if (res.success) address = res.data.address;
+    }
+
+    if (!address) throw new Error('No wallet address returned.');
+
+    STATE.wallet = address;
+    document.getElementById('walletAddr').textContent = truncAddr(address);
+    document.getElementById('walletInfo').classList.remove('hidden');
+    document.getElementById('networkBadge').classList.remove('hidden');
+    btn.textContent = 'CONNECTED';
+    btn.classList.add('opacity-60');
+    btn.disabled = true;
+
+    toast('Wallet connected successfully!', 'success');
+    loadMyTickets();
+  } catch (e) {
+    toast('Failed to connect wallet: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'CONNECT WALLET';
+  }
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+async function loadEvents() {
+  const grid = document.getElementById('eventsGrid');
+  grid.innerHTML = `<div class="col-span-full flex justify-center py-20"><span class="spinner" style="width:32px;height:32px;border-width:3px"></span></div>`;
+
+  const res = await callMCP('get_events', {});
+  if (res.success) {
+    STATE.events = res.data;
+    renderEvents();
+  } else {
+    grid.innerHTML = `<p class="text-red-400 text-sm">Failed to load events.</p>`;
+  }
+}
+
+function renderEvents() {
+  const grid = document.getElementById('eventsGrid');
+  const cat = document.getElementById('filterCategory').value;
+  const date = document.getElementById('filterDate').value;
+
+  let filtered = STATE.events.filter(e => {
+    if (cat && e.category !== cat) return false;
+    if (date && e.date < date) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="col-span-full text-center py-16 text-slate-500 text-sm">No events found.</div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(ev => {
+    const soldPct = Math.round(((ev.supply - ev.remaining) / ev.supply) * 100);
+    const catEmoji = { Music: '🎵', Tech: '💻', Sports: '⚽', Art: '🎨', Conference: '🎤' }[ev.category] || '🎟️';
+    return `
+    <div class="glass-card p-6 flex flex-col gap-4 cursor-pointer hover:scale-[1.01] transition-transform" onclick="">
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="text-xs text-slate-500">${catEmoji} ${ev.category}</span>
+          <h3 class="font-['Orbitron'] font-bold text-sm text-white mt-1">${ev.name}</h3>
+        </div>
+        <div class="text-right">
+          <div class="text-orange-400 font-['Orbitron'] font-bold text-sm">${ev.price} BTC</div>
+          <div class="text-[10px] text-slate-500">per ticket</div>
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-400 leading-relaxed">${ev.description}</p>
+
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="glass-card p-2 rounded-lg">
+          <div class="text-slate-500 text-[10px]">DATE</div>
+          <div class="text-slate-200">${formatDate(ev.date)}</div>
+        </div>
+        <div class="glass-card p-2 rounded-lg">
+          <div class="text-slate-500 text-[10px]">LOCATION</div>
+          <div class="text-slate-200 truncate">${ev.location}</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex justify-between text-[10px] mb-1">
+          <span class="text-slate-500">AVAILABILITY</span>
+          <span class="text-slate-300">${ev.remaining} / ${ev.supply} left</span>
+        </div>
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all" style="width:${soldPct}%"></div>
+        </div>
+      </div>
+
+      <button class="btn-primary text-xs" onclick="openBuyModal('${ev.id}')" ${ev.remaining === 0 ? 'disabled' : ''}>
+        ${ev.remaining === 0 ? 'SOLD OUT' : 'BUY TICKET'}
+      </button>
+    </div>
+    `;
+  }).join('');
+}
+
+function clearFilters() {
+  document.getElementById('filterCategory').value = '';
+  document.getElementById('filterDate').value = '';
+  renderEvents();
+}
+
+// ============================================================
+// BUY TICKET
+// ============================================================
+function openBuyModal(eventId) {
+  if (!STATE.wallet) {
+    toast('Please connect your OPnet wallet first.', 'error');
+    return;
+  }
+  const ev = STATE.events.find(e => e.id === eventId);
+  if (!ev) return;
+
+  document.getElementById('buyContent').innerHTML = `
+    <div class="mb-4">
+      <div class="text-xs text-slate-500 mb-1">EVENT</div>
+      <div class="font-['Orbitron'] font-bold text-white text-sm">${ev.name}</div>
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-6 text-xs">
+      <div class="glass-card p-3 rounded-lg">
+        <div class="text-slate-500 text-[10px]">PRICE / TICKET</div>
+        <div class="text-orange-400 font-bold">${ev.price} BTC</div>
+      </div>
+      <div class="glass-card p-3 rounded-lg">
+        <div class="text-slate-500 text-[10px]">REMAINING</div>
+        <div class="text-slate-200">${ev.remaining}</div>
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs text-slate-400 mb-1 block">QUANTITY</label>
+      <input type="number" class="inp" id="buyQty" value="1" min="1" max="${Math.min(ev.remaining, 10)}" oninput="updateTotal('${eventId}')" />
+    </div>
+    <div class="glass-card p-3 rounded-lg mb-6 flex justify-between items-center">
+      <span class="text-xs text-slate-400">TOTAL</span>
+      <span class="font-['Orbitron'] font-bold text-orange-400 text-sm" id="buyTotal">${ev.price} BTC</span>
+    </div>
+    <div class="text-[10px] text-slate-500 mb-4">
+      ⚡ Payment secured by Bitcoin L1 · OPnet Protocol<br/>
+      📦 Ticket minted as onchain token after confirmation
+    </div>
+    <button class="btn-primary w-full" onclick="executeBuy('${eventId}')">
+      CONFIRM & PAY ON-CHAIN
+    </button>
+    <div id="buyStatus" class="mt-4"></div>
+  `;
+  openModal('buyModal');
+}
+
+function updateTotal(eventId) {
+  const ev = STATE.events.find(e => e.id === eventId);
+  const qty = parseInt(document.getElementById('buyQty').value) || 1;
+  const el = document.getElementById('buyTotal');
+  if (el) el.textContent = (ev.price * qty).toFixed(6) + ' BTC';
+}
+
+async function executeBuy(eventId) {
+  const ev = STATE.events.find(e => e.id === eventId);
+  const qty = parseInt(document.getElementById('buyQty').value) || 1;
+  const statusEl = document.getElementById('buyStatus');
+
+  statusEl.innerHTML = `<div class="flex items-center gap-2 text-xs text-orange-400"><span class="spinner"></span> Sending BTC via OPnet...</div>`;
+
+  try {
+    // Step 1: Transfer BTC
+    const buyRes = await callMCP('buy_ticket', {
+      eventId,
+      quantity: qty,
+      address: STATE.wallet,
+      amount: ev.price * qty,
+      receiver: ev.organizer,
+    });
+
+    if (!buyRes.success) throw new Error(buyRes.error || 'Transaction failed');
+
+    statusEl.innerHTML = `<div class="flex items-center gap-2 text-xs text-green-400"><span class="spinner"></span> Minting ticket token...</div>`;
+
+    // Simulate block confirmation
+    await new Promise(r => setTimeout(r, 1000));
+
+    const ticket = {
+      ticketId: buyRes.data.ticketId,
+      eventId,
+      eventName: ev.name,
+      quantity: qty,
+      status: 'Active',
+      txHash: buyRes.data.txHash,
+      owner: STATE.wallet,
+      timestamp: buyRes.data.timestamp,
+      blockHeight: buyRes.data.blockHeight,
+      price: ev.price * qty,
+    };
+
+    STATE.tickets.unshift(ticket);
+    // Update supply
+    ev.remaining -= qty;
+
+    statusEl.innerHTML = `
+      <div class="glass-card p-4 rounded-lg border border-green-500/30 bg-green-500/5">
+        <div class="text-green-400 text-xs font-bold mb-2">✓ TICKET MINTED SUCCESSFULLY</div>
+        <div class="text-[10px] text-slate-400">Ticket ID: <span class="text-slate-200">${ticket.ticketId}</span></div>
+        <div class="text-[10px] text-slate-400 break-all mt-1">TXN: <span class="text-slate-200">${ticket.txHash.slice(0, 20)}...</span></div>
+        <button class="btn-primary text-xs mt-3 w-full" onclick="closeModal('buyModal');showReceipt('${ticket.txHash}', '${eventId}', ${qty})">VIEW RECEIPT</button>
+      </div>
+    `;
+    renderEvents();
+    toast('Ticket purchased! Check your wallet.', 'success');
+  } catch (e) {
+    statusEl.innerHTML = `<div class="text-red-400 text-xs">❌ Error: ${e.message}</div>`;
+  }
+}
+
+// ============================================================
+// MY TICKETS
+// ============================================================
+async function loadMyTickets() {
+  if (!STATE.wallet) return;
+  const el = document.getElementById('myTicketsList');
+  el.innerHTML = `<div class="flex justify-center py-16"><span class="spinner" style="width:32px;height:32px;border-width:3px"></span></div>`;
+
+  const res = await callMCP('get_my_tickets', { address: STATE.wallet });
+  if (res.success) {
+    // Merge with locally purchased
+    const remote = res.data.map(t => ({ ...t, owner: STATE.wallet }));
+    const localIds = STATE.tickets.map(t => t.ticketId);
+    const merged = [...STATE.tickets, ...remote.filter(t => !localIds.includes(t.ticketId))];
+    STATE.tickets = merged;
+  }
+  renderMyTickets();
+}
+
+function renderMyTickets() {
+  const el = document.getElementById('myTicketsList');
+  if (!STATE.wallet) {
+    el.innerHTML = `<div class="glass-card p-10 text-center text-slate-500 text-sm">Connect your wallet to view tickets.</div>`;
+    return;
+  }
+  if (STATE.tickets.length === 0) {
+    el.innerHTML = `<div class="glass-card p-10 text-center text-slate-500 text-sm">No tickets found. Buy your first ticket!</div>`;
+    return;
+  }
+
+  el.innerHTML = STATE.tickets.map(t => `
+    <div class="ticket-card p-5 mb-4">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <div class="font-['Orbitron'] font-bold text-sm text-white">${t.eventName}</div>
+          <div class="text-xs text-slate-500 mt-1">ID: ${t.ticketId}</div>
+        </div>
+        <span class="badge badge-${t.status === 'Active' ? 'active' : 'used'}">${t.status}</span>
+      </div>
+      <div class="ticket-perforation mb-4"></div>
+      <div class="grid grid-cols-3 gap-3 text-xs mb-4">
+        <div>
+          <div class="text-slate-500 text-[10px]">QUANTITY</div>
+          <div class="text-slate-200 font-bold">${t.quantity}x</div>
+        </div>
+        <div>
+          <div class="text-slate-500 text-[10px]">BLOCK</div>
+          <div class="text-slate-200">#${t.blockHeight}</div>
+        </div>
+        <div>
+          <div class="text-slate-500 text-[10px]">DATE</div>
+          <div class="text-slate-200">${formatTs(t.timestamp)}</div>
+        </div>
+      </div>
+      <div class="text-[10px] text-slate-500 break-all mb-3">TXN: ${t.txHash.slice(0, 32)}...</div>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn-ghost text-[10px]" onclick="showReceipt('${t.txHash}', '${t.eventId}', ${t.quantity})">VIEW RECEIPT</button>
+        ${t.status === 'Active' ? `<button class="btn-ghost text-[10px]" onclick="checkInTicket('${t.ticketId}')">CHECK IN</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function checkInTicket(ticketId) {
+  const ticket = STATE.tickets.find(t => t.ticketId === ticketId);
+  if (!ticket) return;
+  if (!confirm(`Mark ticket ${ticketId} as Used on-chain?`)) return;
+
+  toast('Updating status on Bitcoin blockchain...', 'info');
+  const res = await callMCP('update_ticket_status', { ticketId, status: 'Used', address: STATE.wallet });
+  if (res.success) {
+    ticket.status = 'Used';
+    renderMyTickets();
+    toast('Ticket checked in! Status updated on-chain.', 'success');
+  } else {
+    toast('Failed to update: ' + (res.error || 'Unknown error'), 'error');
+  }
+}
+
+// ============================================================
+// RECEIPT
+// ============================================================
+async function showReceipt(txHash, eventId, quantity) {
+  const modal = document.getElementById('receiptModal');
+  const content = document.getElementById('receiptContent');
+  const actions = document.getElementById('receiptActions');
+
+  content.innerHTML = `<div class="flex justify-center py-8"><span class="spinner" style="width:28px;height:28px;border-width:3px"></span></div>`;
+  openModal('receiptModal');
+
+  const res = await callMCP('get_transaction', { txHash, eventId, quantity, sender: STATE.wallet });
+  if (!res.success) {
+    content.innerHTML = `<p class="text-red-400 text-sm">Failed to fetch receipt.</p>`;
+    return;
+  }
+  const d = res.data;
+
+  content.innerHTML = `
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-500/10 border border-green-500/30 text-2xl mb-3">✓</div>
+      <div class="font-['Orbitron'] text-sm font-bold text-green-400">PAYMENT CONFIRMED</div>
+      <div class="text-xs text-slate-500 mt-1">Bitcoin L1 · OPnet Protocol</div>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      ${row('EVENT', d.eventName)}
+      ${row('QUANTITY', d.quantity + ' ticket(s)')}
+      ${row('AMOUNT', d.amount + ' BTC')}
+      ${row('STATUS', `<span class="badge badge-active">${d.status}</span>`)}
+      ${row('BLOCK HEIGHT', '#' + d.blockHeight)}
+      ${row('CONFIRMATIONS', d.confirmations + ' blocks')}
+      ${row('TIMESTAMP', formatTs(d.timestamp))}
+      <div class="glass-card p-3 rounded-lg">
+        <div class="text-slate-500 text-[10px] mb-1">TXN HASH</div>
+        <div class="text-slate-200 break-all text-[10px]">${d.txHash}</div>
+      </div>
+      <div class="glass-card p-3 rounded-lg">
+        <div class="text-slate-500 text-[10px] mb-1">SENDER</div>
+        <div class="text-slate-200 text-[10px] break-all">${d.sender}</div>
+      </div>
+      <div class="glass-card p-3 rounded-lg">
+        <div class="text-slate-500 text-[10px] mb-1">RECEIVER (CONTRACT)</div>
+        <div class="text-slate-200 text-[10px] break-all">${d.receiver}</div>
+      </div>
+    </div>
+  `;
+
+  actions.innerHTML = `
+    <button class="btn-ghost text-xs" onclick="copyText('${d.txHash}')">COPY TXN</button>
+    <button class="btn-ghost text-xs" onclick="openExplorer('${d.txHash}')">VIEW EXPLORER</button>
+    <button class="btn-ghost text-xs" onclick="showQR('${d.txHash}')">QR CODE</button>
+    <button class="btn-ghost text-xs" onclick="window.print()">PRINT PDF</button>
+  `;
+}
+
+function row(label, val) {
+  return `<div class="flex justify-between items-center py-2 border-b border-orange-900/20">
+    <span class="text-slate-500 text-[10px]">${label}</span>
+    <span class="text-slate-200">${val}</span>
+  </div>`;
+}
+
+// ============================================================
+// VALIDATE TICKET
+// ============================================================
+async function doValidate() {
+  const input = document.getElementById('validateInput').value.trim();
+  const resultEl = document.getElementById('validateResult');
+  if (!input) { toast('Please enter a Ticket ID or TXN Hash.', 'error'); return; }
+  await validateTicket(input, resultEl);
+}
+
+async function doValidateMain() {
+  const input = document.getElementById('validateInputMain').value.trim();
+  const resultEl = document.getElementById('validateResultMain');
+  if (!input) { toast('Please enter a Ticket ID or TXN Hash.', 'error'); return; }
+  await validateTicket(input, resultEl);
+}
+
+async function validateTicket(id, resultEl) {
+  resultEl.innerHTML = `<div class="flex items-center gap-2 text-xs text-orange-400"><span class="spinner"></span> Querying Bitcoin blockchain...</div>`;
+  const res = await callMCP('validate_ticket', { id, address: STATE.wallet });
+
+  if (!res.success) {
+    resultEl.innerHTML = `
+      <div class="glass-card p-4 rounded-lg border border-red-500/30 bg-red-500/5">
+        <div class="text-red-400 text-xs font-bold">❌ TICKET NOT FOUND</div>
+        <div class="text-[10px] text-slate-400 mt-1">${res.error || 'No matching record on-chain.'}</div>
+      </div>`;
+    return;
+  }
+
+  const t = res.data;
+  const isValid = t.status === 'Active';
+
+  resultEl.innerHTML = `
+    <div class="glass-card p-4 rounded-lg border ${isValid ? 'border-green-500/30 bg-green-500/5' : 'border-slate-500/30 bg-slate-500/5'}">
+      <div class="${isValid ? 'text-green-400' : 'text-slate-400'} text-xs font-bold mb-3">${isValid ? '✓ VALID TICKET' : '⚠ TICKET ALREADY USED'}</div>
+      ${row('TICKET ID', t.ticketId || id)}
+      ${row('EVENT', t.eventName || '-')}
+      ${row('OWNER', truncAddr(t.owner || '-'))}
+      ${row('QUANTITY', (t.quantity || 1) + 'x')}
+      ${row('STATUS', `<span class="badge badge-${isValid ? 'active' : 'used'}">${t.status}</span>`)}
+      ${isValid ? `<button class="btn-primary text-xs mt-3 w-full" onclick="checkInTicket('${t.ticketId}')">CHECK IN NOW</button>` : ''}
+    </div>
+  `;
+}
+
+// ============================================================
+// QR CODE
+// ============================================================
+function showQR(text) {
+  const container = document.getElementById('qrContainer');
+  container.innerHTML = '';
+  document.getElementById('qrLabel').textContent = text;
+
+  new QRCode(container, {
+    text: text,
+    width: 200,
+    height: 200,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H,
+  });
+
+  openModal('qrModal');
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function showPage(page, btn) {
+  document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.remove('hidden');
+  btn.classList.add('active');
+
+  if (page === 'mytickets') loadMyTickets();
+}
+
+function truncAddr(addr) {
+  if (!addr || addr.length < 12) return addr;
+  return addr.slice(0, 8) + '...' + addr.slice(-6);
+}
+
+function formatDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatTs(ts) {
+  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success')).catch(() => toast('Copy failed.', 'error'));
+}
+
+function openExplorer(txHash) {
+  window.open('https://explorer.opnet.org/tx/' + txHash, '_blank');
+}
+
+function toast(msg, type = 'info') {
+  const container = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) closeModal(this.id);
+  });
+});
+
+// ============================================================
+// INIT
+// ============================================================
+loadEvents();
+</script>
+</body>
+</html>
