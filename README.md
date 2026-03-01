@@ -252,7 +252,7 @@ OPnet Contract ← BTC Transfer
 Semua transaksi dapat diverifikasi di:
 
 ```
-https://explorer.opnet.org/tx/{txHash}
+[[https://opscan.org]
 ```
 
 ---
